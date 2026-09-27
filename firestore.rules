@@ -1,0 +1,17 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // AirSense air quality collection
+    match /airQuality/{document} {
+      // Allow public dashboard read access
+      allow read: if true;
+      // Allow writes only from authenticated devices/backend services
+      allow write: if request.auth != null;
+    }
+    
+    match /airQuality/history/{readingId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+  }
+}

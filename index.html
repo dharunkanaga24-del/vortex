@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AirSense | Real-Time Air Quality Monitoring Dashboard</title>
+  <meta name="description" content="Production-ready Real-Time Air Quality Monitoring Dashboard connecting Arduino/ESP32 sensor devices to Firebase with live charts, AQI gauge, and historical logs." />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script type="module" crossorigin src="/assets/index-DGD1-ebx.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-BFw1_bZB.css">
+</head>
+<body>
+  <div class="app-wrapper">
+    <!-- HEADER BAR -->
+    <header class="header-bar">
+      <div class="header-brand">
+        <div class="brand-icon-wrapper" aria-hidden="true">
+          <i data-lucide="wind"></i>
+        </div>
+        <div>
+          <h1 class="brand-title">Air<span>Sense</span></h1>
+          <p class="brand-subtitle">Real-Time Air Quality Monitoring System</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <!-- Firebase Connection Status Badge -->
+        <div class="status-pill" id="badge-firebase-status" title="Firebase Database connection status">
+          <span class="status-dot warning" id="conn-status-dot"></span>
+          <span id="conn-status-text">Connecting to Firebase...</span>
+        </div>
+
+        <!-- Arduino Device Status Badge -->
+        <div class="status-pill device-status-badge" id="badge-device-status" title="Arduino / ESP32 Hardware Status">
+          <span class="status-dot disconnected" id="device-status-dot"></span>
+          <span id="device-status-text">Device Offline</span>
+        </div>
+
+        <!-- Last Updated Time -->
+        <div class="status-pill" title="Timestamp of latest sensor packet">
+          <i data-lucide="clock" style="width: 14px; height: 14px;"></i>
+          <span><span id="last-updated-time">--:--:--</span> (<span id="last-updated-relative">Never</span>)</span>
+        </div>
+
+        <!-- Action Buttons -->
+        <button class="btn-icon" id="btn-refresh" title="Refresh Realtime Listeners" aria-label="Refresh">
+          <i data-lucide="rotate-cw"></i>
+        </button>
+
+        <button class="btn-icon" id="btn-theme-toggle" title="Toggle Dark/Light Mode" aria-label="Toggle Theme">
+          <i data-lucide="sun-moon"></i>
+        </button>
+
+        <button class="btn-action" id="btn-setup-guide" title="Firebase Setup Instructions">
+          <i data-lucide="settings"></i>
+          <span>Config Guide</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- CONFIGURATION & DEMO NOTICE BANNER (Visible when placeholder credentials are used) -->
+    <div class="banner-notice banner-warning hidden" id="banner-notice">
+      <div class="banner-content">
+        <i data-lucide="alert-triangle" style="color: #eab308; width: 22px; height: 22px; flex-shrink: 0;"></i>
+        <div>
+          <strong>Firebase Configuration Pending:</strong>
+          <span>To connect your live Arduino, update your keys in <code>src/config.js</code>. Currently showing live simulation demo.</span>
+        </div>
+      </div>
+      <div class="banner-actions">
+        <button class="btn-action btn-primary" id="btn-toggle-sim">Stop Demo Mode</button>
+      </div>
+    </div>
+
+    <!-- MAIN DASHBOARD CONTENT -->
+    <main>
+      <!-- SECTION 1: LIVE CURRENT READINGS & HERO AQI GAUGE -->
+      <div class="dashboard-grid">
+        <!-- AQI Hero Card with Circular Gauge -->
+        <section class="card aqi-hero-card" id="card-aqi">
+          <div class="card-header-simple">
+            <span class="card-title">
+              <i data-lucide="activity" style="color: var(--color-primary); width: 18px; height: 18px;"></i>
+              Current Air Quality
+            </span>
+            <span class="status-pill" style="font-size: 0.75rem;">US-EPA Standard</span>
+          </div>
+
+          <!-- Circular Radial Gauge -->
+          <div class="gauge-container">
+            <canvas id="aqi-gauge-canvas" class="gauge-canvas" width="280" height="240"></canvas>
+            <div class="gauge-center-content">
+              <span class="gauge-aqi-number" id="hero-aqi-number">--</span>
+              <span class="gauge-aqi-label">AQI SCORE</span>
+            </div>
+          </div>
+
+          <!-- AQI Category Badge -->
+          <div class="aqi-status-pill aqi-nodata" id="hero-aqi-status">
+            Waiting for Data
+          </div>
+
+          <!-- Dynamic Health Advisory Box -->
+          <div class="aqi-advisory-box">
+            <div class="advisory-title">
+              <i data-lucide="shield-check" style="width: 14px; height: 14px;"></i>
+              Health Recommendation
+            </div>
+            <p class="advisory-text" id="aqi-advisory-text">
+              Waiting for sensor readings from Arduino/Firebase...
+            </p>
+          </div>
+        </section>
+
+        <!-- SENSOR METRIC CARDS GRID -->
+        <section class="sensor-cards-grid">
+          <!-- PM2.5 Card -->
+          <div class="sensor-card" id="card-pm25">
+            <div class="sensor-card-top">
+              <span class="sensor-title">PM2.5 (Fine Particulates)</span>
+              <div class="sensor-icon-pill icon-pm25">
+                <i data-lucide="cloud-fog"></i>
+              </div>
+            </div>
+            <div class="sensor-value-wrapper">
+              <span class="sensor-val" id="val-pm25">--</span>
+              <span class="sensor-unit">µg/m³</span>
+            </div>
+            <div class="sensor-footer-status">
+              <i data-lucide="info" style="width: 12px; height: 12px;"></i>
+              <span>Particles &lt; 2.5 µm diameter</span>
+            </div>
+          </div>
+
+          <!-- PM10 Card -->
+          <div class="sensor-card" id="card-pm10">
+            <div class="sensor-card-top">
+              <span class="sensor-title">PM10 (Coarse Dust)</span>
+              <div class="sensor-icon-pill icon-pm10">
+                <i data-lucide="cloud-rain"></i>
+              </div>
+            </div>
+            <div class="sensor-value-wrapper">
+              <span class="sensor-val" id="val-pm10">--</span>
+              <span class="sensor-unit">µg/m³</span>
+            </div>
+            <div class="sensor-footer-status">
+              <i data-lucide="info" style="width: 12px; height: 12px;"></i>
+              <span>Dust, pollen, mold spores</span>
+            </div>
+          </div>
+
+          <!-- CO2 Card -->
+          <div class="sensor-card" id="card-co2">
+            <div class="sensor-card-top">
+              <span class="sensor-title">CO₂ Concentration</span>
+              <div class="sensor-icon-pill icon-co2">
+                <i data-lucide="gauge"></i>
+              </div>
+            </div>
+            <div class="sensor-value-wrapper">
+              <span class="sensor-val" id="val-co2">--</span>
+              <span class="sensor-unit">ppm</span>
+            </div>
+            <div class="sensor-footer-status">
+              <i data-lucide="info" style="width: 12px; height: 12px;"></i>
+              <span>Carbon Dioxide levels</span>
+            </div>
+          </div>
+
+          <!-- Temperature Card -->
+          <div class="sensor-card" id="card-temp">
+            <div class="sensor-card-top">
+              <span class="sensor-title">Temperature</span>
+              <div class="sensor-icon-pill icon-temp">
+                <i data-lucide="thermometer"></i>
+              </div>
+            </div>
+            <div class="sensor-value-wrapper">
+              <span class="sensor-val" id="val-temp">--</span>
+              <span class="sensor-unit">°C</span>
+            </div>
+            <div class="sensor-footer-status">
+              <i data-lucide="sun" style="width: 12px; height: 12px;"></i>
+              <span>Ambient ambient temperature</span>
+            </div>
+          </div>
+
+          <!-- Humidity Card -->
+          <div class="sensor-card" id="card-hum">
+            <div class="sensor-card-top">
+              <span class="sensor-title">Relative Humidity</span>
+              <div class="sensor-icon-pill icon-hum">
+                <i data-lucide="droplets"></i>
+              </div>
+            </div>
+            <div class="sensor-value-wrapper">
+              <span class="sensor-val" id="val-hum">--</span>
+              <span class="sensor-unit">%</span>
+            </div>
+            <div class="sensor-footer-status">
+              <i data-lucide="droplet" style="width: 12px; height: 12px;"></i>
+              <span>Air moisture saturation</span>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- SECTION 2: DEVICE INFORMATION BAR -->
+      <section class="device-info-bar">
+        <div class="info-item">
+          <span class="info-label">Device Identifier</span>
+          <span class="info-val" id="info-device-name">AirSense-01</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Database Engine</span>
+          <span class="info-val" id="info-db-type">RTDB</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Update Interval</span>
+          <span class="info-val" id="info-update-interval">10 seconds</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Last Transmission</span>
+          <span class="info-val" id="info-last-seen">--:--:--</span>
+        </div>
+      </section>
+
+      <!-- SECTION 3: REAL-TIME CHARTS WITH TIME FILTERS -->
+      <section>
+        <div class="section-header">
+          <h2 class="section-title">
+            <i data-lucide="trending-up" style="color: var(--color-primary);"></i>
+            Historical Sensor Trends
+          </h2>
+
+          <!-- Time Range Filter Buttons -->
+          <div class="filter-group">
+            <button class="btn-filter" data-filter="1h">1 Hour</button>
+            <button class="btn-filter" data-filter="6h">6 Hours</button>
+            <button class="btn-filter active" data-filter="24h">24 Hours</button>
+            <button class="btn-filter" data-filter="7d">7 Days</button>
+            <button class="btn-filter" data-filter="30d">30 Days</button>
+            <button class="btn-filter" data-filter="all">All</button>
+          </div>
+        </div>
+
+        <div id="charts-empty-notice" class="banner-notice banner-info hidden" style="margin-bottom: 20px;">
+          <i data-lucide="info" style="width: 18px; height: 18px;"></i>
+          <span>No historical readings found for the selected time filter. Showing live points as they arrive.</span>
+        </div>
+
+        <div class="charts-grid">
+          <!-- Graph 1: AQI History -->
+          <div class="card chart-card">
+            <div class="chart-card-header">
+              <span class="chart-title">
+                <i data-lucide="activity" style="color: #2563EB; width: 16px; height: 16px;"></i>
+                Air Quality Index (AQI) History
+              </span>
+            </div>
+            <div class="chart-container-inner">
+              <canvas id="chart-aqi"></canvas>
+            </div>
+          </div>
+
+          <!-- Graph 2: PM2.5 & PM10 History -->
+          <div class="card chart-card">
+            <div class="chart-card-header">
+              <span class="chart-title">
+                <i data-lucide="layers" style="color: #06B6D4; width: 16px; height: 16px;"></i>
+                Particulates (PM2.5 &amp; PM10)
+              </span>
+            </div>
+            <div class="chart-container-inner">
+              <canvas id="chart-particulates"></canvas>
+            </div>
+          </div>
+
+          <!-- Graph 3: CO2 History -->
+          <div class="card chart-card">
+            <div class="chart-card-header">
+              <span class="chart-title">
+                <i data-lucide="wind" style="color: #8B5CF6; width: 16px; height: 16px;"></i>
+                CO₂ Concentration (ppm)
+              </span>
+            </div>
+            <div class="chart-container-inner">
+              <canvas id="chart-co2"></canvas>
+            </div>
+          </div>
+
+          <!-- Graph 4: Temperature & Humidity (Dual Scale) -->
+          <div class="card chart-card">
+            <div class="chart-card-header">
+              <span class="chart-title">
+                <i data-lucide="thermometer-snowflake" style="color: #EF4444; width: 16px; height: 16px;"></i>
+                Temperature &amp; Humidity
+              </span>
+            </div>
+            <div class="chart-container-inner">
+              <canvas id="chart-climate"></canvas>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 4: HISTORICAL DATA TABLE & EXPORT -->
+      <section class="table-card">
+        <div class="table-header-row">
+          <div>
+            <h2 class="section-title">
+              <i data-lucide="database" style="color: var(--color-primary); width: 20px; height: 20px;"></i>
+              Historical Sensor Readings Log
+            </h2>
+            <p style="font-size: 0.82rem; color: var(--text-muted); margin-top: 4px;">
+              Raw telemetry packets stored in Firebase backend
+            </p>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <!-- Download CSV Button -->
+            <button class="btn-action btn-primary" id="btn-export-csv" title="Export all historical records to CSV file">
+              <i data-lucide="download"></i>
+              <span>Download CSV</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>AQI</th>
+                <th>PM2.5</th>
+                <th>PM10</th>
+                <th>CO₂</th>
+                <th>Temperature</th>
+                <th>Humidity</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="history-table-body">
+              <!-- Dynamically populated by table.js -->
+            </tbody>
+          </table>
+        </div>
+
+        <div class="pagination-container" id="table-pagination">
+          <!-- Dynamically populated pagination controls -->
+        </div>
+      </section>
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="app-footer">
+      <p>AirSense IoT Environmental System &bull; Direct Arduino/ESP32 Firebase Telemetry Pipeline &bull; All data received in real-time</p>
+    </footer>
+  </div>
+
+  <!-- SETUP & CONFIGURATION GUIDE MODAL -->
+  <div class="modal-backdrop" id="setup-modal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">
+          <i data-lucide="sliders" style="color: var(--color-primary); vertical-align: middle; margin-right: 6px;"></i>
+          Connecting Your Arduino &amp; Firebase
+        </h3>
+        <button class="btn-icon" id="btn-close-modal" aria-label="Close Modal">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <h4>1. Where to Paste Your Firebase Config</h4>
+        <p>Open the file <code>src/config.js</code> in your code editor and replace the placeholder object with your Firebase Web App credentials:</p>
+        <pre class="code-snippet"><code>export const firebaseConfig = {
+  apiKey: "AIzaSy...",
+  authDomain: "your-project.firebaseapp.com",
+  databaseURL: "https://your-project-default-rtdb.firebaseio.com",
+  projectId: "your-project-id",
+  storageBucket: "your-project.appspot.com",
+  messagingSenderId: "123456789",
+  appId: "1:123456789:web:abcdef"
+};</code></pre>
+
+        <h4>2. Database Type &amp; Paths</h4>
+        <p>In <code>src/config.js</code>, configure whether you are using Realtime Database (<code>"rtdb"</code>) or Firestore (<code>"firestore"</code>), and customize your JSON paths:</p>
+        <pre class="code-snippet"><code>export const DATABASE_TYPE = "rtdb"; // or "firestore"
+
+export const FIREBASE_PATHS = {
+  current: "airQuality/current",
+  history: "airQuality/history"
+};</code></pre>
+
+        <h4>3. Arduino / ESP32 Data Payload Format</h4>
+        <p>Your microcontroller should publish JSON telemetry matching this structure:</p>
+        <pre class="code-snippet"><code>{
+  "pm25": 28.4,
+  "pm10": 42.1,
+  "co2": 680,
+  "temperature": 26.5,
+  "humidity": 58.0,
+  "aqi": 68,
+  "timestamp": 1727000000000,
+  "deviceId": "AirSense-01"
+}</code></pre>
+
+        <h4>4. Arduino Sketch &amp; Security Rules</h4>
+        <p>Ready-to-flash Arduino/ESP32 code is located in <code>arduino/AirSense_ESP32_Firebase.ino</code>, and sample production security rules are in <code>database.rules.json</code>.</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast-container" class="toast-container"></div>
+
+</body>
+</html>
